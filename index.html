@@ -103,7 +103,7 @@
   #cancelBtn,#nameCancelBtn{background:#eee;}
   #saveBtn,#nameSaveBtn{background:var(--verde);color:#fff;}
   #statusMsg,#nameStatus{font-size:0.75rem;color:#777;margin-top:6px;min-height:16px;}
-  .leaflet-div-icon-tag{color:#fff;font-weight:700;font-size:0.7rem;border-radius:5px;padding:3px 6px;text-align:center;white-space:nowrap;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.4);}
+  .leaflet-div-icon-tag{color:#fff;font-weight:700;font-size:0.68rem;border-radius:5px;padding:3px 6px;text-align:center;line-height:1.3;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.4);}
   .badge-urgente{background:var(--rojo-urgente);}
   .badge-medio{background:var(--amarillo);color:var(--tinta);}
   .badge-lleno{background:var(--azul-lleno);}
@@ -127,7 +127,7 @@
 <header>
   <div>
     <h1>🆘 Mapa de Voluntariados</h1>
-    <p>Centros de acopio, distribución y eventos recolectores. Cualquiera puede actualizar; queda registrado quién y cuándo.</p>
+    <p>Centros de acopio, distribución, eventos de recaudación y más. Cualquiera puede actualizar; queda registrado quién y cuándo.</p>
   </div>
   <div class="actions">
     <select id="citySelect"></select>
@@ -136,11 +136,11 @@
 </header>
 
 <div id="filters">
-  <label><input type="checkbox" id="fltAcopio" checked> 📦 Acopio</label>
+  <label><input type="checkbox" id="fltAcopio" checked> 📦 Centro de acopio</label>
   <label><input type="checkbox" id="fltDistribucion" checked> 🚚 Distribución</label>
-  <label><input type="checkbox" id="fltEvento" checked> 🎁 Eventos</label>
+  <label><input type="checkbox" id="fltEvento" checked> 🎁 Eventos recaudación de fondos</label>
   <label><input type="checkbox" id="fltSangre" checked> 🩸 Sangre</label>
-  <label><input type="checkbox" id="fltOrganismo" checked> 🏥 Organismos</label>
+  <label><input type="checkbox" id="fltOrganismo" checked> 🏥 Organismos institucionales</label>
   <label><input type="checkbox" id="fltDano" checked> 🏚️ Afectación</label>
   <label><input type="checkbox" id="fltOcultarCerrados" checked> Ocultar cerrados</label>
   <span id="syncStatus"></span>
@@ -177,9 +177,9 @@
     <select id="fType">
       <option value="acopio">📦 Centro de acopio</option>
       <option value="distribucion">🚚 Centro de distribución</option>
-      <option value="evento">🎁 Evento recolector</option>
+      <option value="evento">🎁 Eventos recaudación de fondos</option>
       <option value="sangre">🩸 Donación de sangre</option>
-      <option value="organismo">🏥 Organismo de ayuda</option>
+      <option value="organismo">🏥 Organismos institucionales</option>
       <option value="dano">🏚️ Reporte de afectación</option>
     </select>
 
@@ -297,7 +297,7 @@
 // =========================================================
 const SUPABASE_URL = 'https://bwaugkjevaulpsayxxkw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3YXVna2pldmF1bHBzYXl4eGt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2NTE5MzIsImV4cCI6MjEwMjIyNzkzMn0.ZCGGb57s1ziVBj196Y_X3Yzf1cDj2SAYbw_hdW_AtgM';
-// =========================================================
+// ==================================================
 
 const sb = (SUPABASE_URL.startsWith('http'))
   ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -422,8 +422,8 @@ function dropLocationPin(lat, lng, label){
 
 const TYPE_EMOJI = { acopio:'📦', distribucion:'🚚', evento:'🎁', sangre:'🩸', organismo:'🏥', dano:'🏚️' };
 const TYPE_LABEL = {
-  acopio:'📦 Centro de acopio', distribucion:'🚚 Centro de distribución', evento:'🎁 Evento recolector',
-  sangre:'🩸 Donación de sangre', organismo:'🏥 Organismo de ayuda', dano:'🏚️ Reporte de afectación'
+  acopio:'📦 Centro de acopio', distribucion:'🚚 Centro de distribución', evento:'🎁 Eventos recaudación de fondos',
+  sangre:'🩸 Donación de sangre', organismo:'🏥 Organismos institucionales', dano:'🏚️ Reporte de afectación'
 };
 const CAPACITY_TYPES = ['acopio','distribucion','evento','sangre'];
 const SEVERITY_LABEL = { colapsada:'🟥 Edificación colapsada', grave:'🟧 Afectación grave', media:'🟨 Afectación media' };
@@ -447,8 +447,8 @@ function iconFor(site){
   const cls = pct>=100 ? 'badge-lleno' : (pct<34 ? 'badge-urgente' : 'badge-medio');
   const label = pct>=100 ? '100% Lleno' : `${pct}%`;
   return L.divIcon({
-    className:'', html:`<div class="leaflet-div-icon-tag ${cls}">${emoji} ${label}</div>`,
-    iconSize:null, iconAnchor:[24,10]
+    className:'', html:`<div class="leaflet-div-icon-tag ${cls}" style="white-space:normal;text-align:center;line-height:1.3;"><div>${emoji}</div><div style="font-size:0.68em;">Voluntarios ${label}</div></div>`,
+    iconSize:null, iconAnchor:[24,14]
   });
 }
 
