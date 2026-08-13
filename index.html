@@ -31,8 +31,14 @@
   #filters label{display:flex;align-items:center;gap:5px;cursor:pointer;}
   #filters .legend{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap;font-size:0.72rem;color:#555;}
   #syncStatus{font-size:0.7rem;color:#888;}
+  #mapSearchBar{
+    display:flex; gap:8px; align-items:center; padding:8px 20px; background:#fff;
+    border-bottom:1px solid var(--linea); flex-wrap:wrap;
+  }
+  #mapSearchInput{flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--linea);border-radius:6px;font-size:0.85rem;}
+  #mapSearchBtn{background:var(--verde);color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:600;cursor:pointer;font-size:0.85rem;}
   .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:3px;}
-  #layout{display:flex;height:calc(100vh - 108px);flex-wrap:wrap;}
+  #layout{display:flex;height:calc(100vh - 156px);flex-wrap:wrap;}
   #map{flex:1 1 55%;min-height:340px;}
   #panel{flex:1 1 40%;min-width:300px;overflow-y:auto;padding:14px;border-left:1px solid var(--linea);background:#fff;}
   .card{border:1px solid var(--linea);border-left:5px solid var(--verde-claro);border-radius:6px;padding:12px;margin-bottom:12px;background:#fffdf8;}
@@ -143,6 +149,12 @@
     <span><span class="dot" style="background:var(--amarillo);"></span>34–99%</span>
     <span><span class="dot" style="background:var(--azul-lleno);"></span>100% Lleno</span>
   </div>
+</div>
+
+<div id="mapSearchBar">
+  <input id="mapSearchInput" placeholder="Buscar dirección o barrio en el mapa...">
+  <button id="mapSearchBtn">Buscar</button>
+  <span id="mapSearchStatus" class="hint"></span>
 </div>
 
 <div id="layout">
@@ -318,7 +330,7 @@ const SUPPLY_OPTIONS = [
 const DEPARTURE_LABELS = { avion: '✈️ Avión', ayuda: '🚛 Ayuda' };
 
 let sites = [];
-let map, markersLayer;
+let map, markersLayer, locationPin, previewMarker;
 let pickedLat = null, pickedLng = null;
 let currentType = 'acopio';
 let selectedSupplies = new Set();
@@ -346,16 +358,61 @@ function initMap(){
 
   map.on('click', (e) => {
     if(document.getElementById('overlay').style.display === 'flex'){
-      pickedLat = e.latlng.lat; pickedLng = e.latlng.lng;
-      document.getElementById('coordsLabel').textContent = `Ubicación elegida: ${pickedLat.toFixed(4)}, ${pickedLng.toFixed(4)}`;
+      showPreviewMarker(e.latlng.lat, e.latlng.lng);
     } else {
-      openModal(null, e.latlng.lat, e.latlng.lng);
+      dropLocationPin(e.latlng.lat, e.latlng.lng);
     }
   });
 }
 
 function pctOf(site){ return site.needed > 0 ? Math.min(100, Math.round((site.have/site.needed)*100)) : 100; }
 function badgeClass(pct){ if(pct>=100) return 'lleno'; if(pct<34) return 'urgente'; return ''; }
+
+function previewIcon(type){
+  return L.divIcon({
+    className:'', html:`<div class="leaflet-div-icon-tag" style="background:var(--naranja);border-style:dashed;">${TYPE_EMOJI[type]||'📍'} Arrastra para ubicar</div>`,
+    iconSize:null, iconAnchor:[24,10]
+  });
+}
+function updateCoordsLabel(){
+  document.getElementById('coordsLabel').textContent = pickedLat !== null
+    ? `Ubicación: ${pickedLat.toFixed(4)}, ${pickedLng.toFixed(4)}`
+    : 'Toca el mapa para elegir ubicación, o busca una dirección abajo.';
+}
+function showPreviewMarker(lat, lng){
+  pickedLat = lat; pickedLng = lng;
+  if(!previewMarker){
+    previewMarker = L.marker([lat, lng], {draggable:true, icon: previewIcon(currentType)}).addTo(map);
+    previewMarker.on('drag', (e) => {
+      const p = e.target.getLatLng();
+      pickedLat = p.lat; pickedLng = p.lng;
+      updateCoordsLabel();
+    });
+  } else {
+    previewMarker.setLatLng([lat, lng]);
+  }
+  updateCoordsLabel();
+}
+function removePreviewMarker(){
+  if(previewMarker){ map.removeLayer(previewMarker); previewMarker = null; }
+}
+function dropLocationPin(lat, lng, label){
+  if(locationPin) map.removeLayer(locationPin);
+  locationPin = L.marker([lat, lng], {draggable:true}).addTo(map);
+  locationPin.bindPopup(
+    `<div style="text-align:center;">${label ? `<b>${escapeHtml(label)}</b><br>` : ''}
+     <button id="addFromPinBtn" style="margin-top:6px;padding:6px 10px;border:none;border-radius:5px;background:#1F3A2E;color:#fff;cursor:pointer;font-weight:600;">+ Agregar sitio aquí</button></div>`
+  );
+  locationPin.on('popupopen', () => {
+    const btn = document.getElementById('addFromPinBtn');
+    if(btn) btn.onclick = () => {
+      const pos = locationPin.getLatLng();
+      map.removeLayer(locationPin); locationPin = null;
+      openModal(null, pos.lat, pos.lng);
+    };
+  });
+  locationPin.openPopup();
+}
 
 const TYPE_EMOJI = { acopio:'📦', distribucion:'🚚', evento:'🎁', sangre:'🩸', organismo:'🏥', dano:'🏚️' };
 const TYPE_LABEL = {
@@ -724,6 +781,7 @@ function setType(type){
   document.getElementById('eventBlock').style.display = type === 'evento' ? 'block' : 'none';
   document.getElementById('severityBlock').style.display = type === 'dano' ? 'block' : 'none';
   document.getElementById('capacityBlock').style.display = CAPACITY_TYPES.includes(type) ? 'block' : 'none';
+  if(previewMarker) previewMarker.setIcon(previewIcon(type));
 }
 document.getElementById('fType').addEventListener('change', (e) => setType(e.target.value));
 
@@ -757,11 +815,16 @@ function openModal(site, lat, lng){
 
   pickedLat = site ? site.lat : (lat !== undefined ? lat : null);
   pickedLng = site ? site.lng : (lng !== undefined ? lng : null);
-  document.getElementById('coordsLabel').textContent = pickedLat
-    ? `Ubicación: ${pickedLat.toFixed(4)}, ${pickedLng.toFixed(4)}`
-    : 'Toca el mapa para elegir ubicación, o busca una dirección abajo.';
+  if(pickedLat === null){
+    const c = map.getCenter();
+    pickedLat = c.lat; pickedLng = c.lng;
+  }
+  showPreviewMarker(pickedLat, pickedLng);
 }
-function closeModal(){ document.getElementById('overlay').style.display = 'none'; }
+function closeModal(){
+  document.getElementById('overlay').style.display = 'none';
+  removePreviewMarker();
+}
 
 document.getElementById('addBtn').addEventListener('click', () => openModal(null));
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
@@ -777,8 +840,7 @@ document.getElementById('searchAddrBtn').addEventListener('click', async () => {
     const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=1`);
     const data = await res.json();
     if(data && data.length > 0){
-      pickedLat = parseFloat(data[0].lat); pickedLng = parseFloat(data[0].lon);
-      document.getElementById('coordsLabel').textContent = `Ubicación encontrada: ${pickedLat.toFixed(4)}, ${pickedLng.toFixed(4)}`;
+      showPreviewMarker(parseFloat(data[0].lat), parseFloat(data[0].lon));
       map.setView([pickedLat, pickedLng], 15);
       statusEl.textContent = '';
     } else {
@@ -862,6 +924,32 @@ populateCitySelects();
 initMap();
 loadSites();
 subscribeRealtime();
+
+async function searchOnMap(){
+  const q = document.getElementById('mapSearchInput').value.trim();
+  const statusEl = document.getElementById('mapSearchStatus');
+  if(!q) return;
+  statusEl.textContent = 'Buscando...';
+  try{
+    const query = encodeURIComponent(q + ', ' + selectedCity + ', Colombia');
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${query}&limit=1`);
+    const data = await res.json();
+    if(data && data.length > 0){
+      const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
+      map.setView([lat, lng], 16);
+      dropLocationPin(lat, lng, q);
+      statusEl.textContent = '';
+    } else {
+      statusEl.textContent = 'No se encontró esa dirección.';
+    }
+  }catch(e){
+    statusEl.textContent = 'Error buscando. Intenta de nuevo.';
+  }
+}
+document.getElementById('mapSearchBtn').addEventListener('click', searchOnMap);
+document.getElementById('mapSearchInput').addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') searchOnMap();
+});
 </script>
 </body>
 </html>
