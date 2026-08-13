@@ -212,11 +212,15 @@
     </div>
 
     <div id="capacityBlock">
-      <label>Voluntarios necesarios *</label>
-      <input id="fNeed" type="number" min="1" value="10">
+      <label>¿Se necesitan voluntarios? *</label>
+      <select id="fNeedsVolunteers">
+        <option value="si">Sí</option>
+        <option value="no">No</option>
+        <option value="directo">Acercarse directamente</option>
+      </select>
 
-      <label>Voluntarios actuales</label>
-      <input id="fHave" type="number" min="0" value="0">
+      <label>Aforo de voluntarios actual %</label>
+      <input id="fAforoPct" type="number" min="0" max="100" value="0">
     </div>
 
     <div id="suppliesBlock">
@@ -429,6 +433,9 @@ const CAPACITY_TYPES = ['acopio','distribucion','evento','sangre'];
 const SEVERITY_LABEL = { colapsada:'🟥 Edificación colapsada', grave:'🟧 Afectación grave', media:'🟨 Afectación media' };
 const SEVERITY_COLOR = { colapsada:'var(--rojo-urgente)', grave:'var(--naranja)', media:'var(--amarillo)' };
 
+const NEEDS_VOL_LABEL = { si:'Sí', no:'No', directo:'Acercarse directamente' };
+const NEEDS_VOL_LABEL_FULL = { si:'Sí', no:'No', directo:'Acercarse directamente' };
+
 function iconFor(site){
   const emoji = TYPE_EMOJI[site.type] || '📍';
   if(site.type === 'dano'){
@@ -446,7 +453,7 @@ function iconFor(site){
   const pct = pctOf(site);
   const cls = pct>=100 ? 'badge-lleno' : (pct<34 ? 'badge-urgente' : 'badge-medio');
   return L.divIcon({
-    className:'', html:`<div class="leaflet-div-icon-tag ${cls}" style="white-space:normal;text-align:center;line-height:1.3;"><div>${emoji}</div><div style="font-size:0.68em;">Voluntarios requeridos: ${site.needed}</div><div style="font-size:0.68em;">${pct}% actual</div></div>`,
+    className:'', html:`<div class="leaflet-div-icon-tag ${cls}" style="white-space:normal;text-align:center;line-height:1.3;"><div>${emoji}</div><div style="font-size:0.68em;">Voluntarios: ${NEEDS_VOL_LABEL[site.needsVolunteers]||'Sí'}</div><div style="font-size:0.68em;">${pct}% aforo actual</div></div>`,
     iconSize:null, iconAnchor:[24,18]
   });
 }
@@ -483,7 +490,8 @@ function rowToSite(row){
     needed: row.needed, have: row.have, supplies: row.supplies || [],
     departures: row.departures || [], eventTime: row.event_time, severity: row.severity,
     estado: row.estado || 'activo',
-    contact: row.contact, instagram: row.instagram, formulario: row.formulario, fotoUrl: row.foto_url, history: row.history || []
+    contact: row.contact, instagram: row.instagram, formulario: row.formulario, fotoUrl: row.foto_url,
+    needsVolunteers: row.needs_volunteers || 'si', history: row.history || []
   };
 }
 
@@ -493,7 +501,8 @@ async function insertSite(site){
     address: site.addr, lat: site.lat, lng: site.lng, needed: site.needed,
     have: site.have, supplies: site.supplies, departures: site.departures,
     event_time: site.eventTime || null, severity: site.severity || null, estado: site.estado || 'activo',
-    contact: site.contact, instagram: site.instagram, formulario: site.formulario, foto_url: site.fotoUrl || null, history: site.history
+    contact: site.contact, instagram: site.instagram, formulario: site.formulario, foto_url: site.fotoUrl || null,
+    needs_volunteers: site.needsVolunteers || null, history: site.history
   }]);
   return error;
 }
@@ -504,7 +513,8 @@ async function updateSite(site){
     lat: site.lat, lng: site.lng, needed: site.needed, have: site.have,
     supplies: site.supplies, departures: site.departures, event_time: site.eventTime || null,
     severity: site.severity || null, estado: site.estado || 'activo',
-    contact: site.contact, instagram: site.instagram, formulario: site.formulario, foto_url: site.fotoUrl || null, history: site.history
+    contact: site.contact, instagram: site.instagram, formulario: site.formulario, foto_url: site.fotoUrl || null,
+    needs_volunteers: site.needsVolunteers || null, history: site.history
   }).eq('id', site.id);
   return error;
 }
@@ -560,7 +570,7 @@ function render(){
 
   visible.forEach(site => {
     const marker = L.marker([site.lat, site.lng], {icon: iconFor(site)});
-    marker.bindPopup(`<b>${escapeHtml(site.name)}</b><br>${escapeHtml(site.desc||'')}<br>Voluntarios requeridos: ${site.have}/${site.needed}`);
+    marker.bindPopup(`<b>${escapeHtml(site.name)}</b><br>${escapeHtml(site.desc||'')}<br>Voluntarios: ${NEEDS_VOL_LABEL_FULL[site.needsVolunteers]||'Sí'} — ${pctOf(site)}% aforo`);
     marker.on('click', () => document.getElementById('card-'+site.id)?.scrollIntoView({behavior:'smooth', block:'center'}));
     markersLayer.addLayer(marker);
 
@@ -595,7 +605,7 @@ function render(){
 
     const capacityHtml = hasCapacity ? `
       <div class="barra-wrap"><div class="barra" style="width:${pct}%"></div></div>
-      <div class="meta">Voluntarios requeridos: ${site.needed} · ${pct}% actual (${site.have} de ${site.needed})${site.contact ? ' · Contacto: '+escapeHtml(site.contact) : ''}</div>
+      <div class="meta">¿Se necesitan voluntarios? ${NEEDS_VOL_LABEL_FULL[site.needsVolunteers]||'Sí'} · Aforo actual: ${pct}%${site.contact ? ' · Contacto: '+escapeHtml(site.contact) : ''}</div>
     ` : (site.contact ? `<div class="meta">Contacto: ${escapeHtml(site.contact)}</div>` : '');
 
     const history = (site.history || []).slice(-5).reverse();
@@ -633,8 +643,8 @@ function render(){
       ${departuresHtml}
       <div class="row">
         ${hasCapacity ? `
-        <button class="btn-mas" data-act="mas" data-id="${site.id}">+1 voluntario</button>
-        <button class="btn-menos" data-act="menos" data-id="${site.id}">-1</button>` : ''}
+        <button class="btn-mas" data-act="mas" data-id="${site.id}">+1% aforo</button>
+        <button class="btn-menos" data-act="menos" data-id="${site.id}">-1%</button>` : ''}
         <button class="btn-editar" data-act="editar" data-id="${site.id}">Editar</button>
         <button class="btn-borrar" data-act="borrar" data-id="${site.id}">Archivar</button>
       </div>
@@ -799,8 +809,8 @@ function openModal(site, lat, lng){
   document.getElementById('fName').value = site ? site.name : '';
   document.getElementById('fDesc').value = site ? site.desc : '';
   document.getElementById('fAddr').value = site ? site.addr : '';
-  document.getElementById('fNeed').value = site ? site.needed : 10;
-  document.getElementById('fHave').value = site ? site.have : 0;
+  document.getElementById('fNeedsVolunteers').value = site ? (site.needsVolunteers || 'si') : 'si';
+  document.getElementById('fAforoPct').value = site ? pctOf(site) : 0;
   document.getElementById('fContact').value = site ? site.contact : '';
   document.getElementById('fInstagram').value = site ? (site.instagram || '') : '';
   document.getElementById('fFormulario').value = site ? (site.formulario || '') : '';
@@ -894,13 +904,12 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
 
   const name = document.getElementById('fName').value.trim();
   const hasCapacity = CAPACITY_TYPES.includes(currentType);
-  const needed = hasCapacity ? (parseInt(document.getElementById('fNeed').value) || 0) : 1;
+  const aforoPct = hasCapacity ? Math.min(100, Math.max(0, parseInt(document.getElementById('fAforoPct').value) || 0)) : 0;
   const editorName = document.getElementById('fEditorName').value.trim();
   const city = document.getElementById('fCity').value;
 
   if(!name){ statusEl.textContent = 'Falta el nombre del sitio.'; return; }
   if(pickedLat === null || pickedLng === null){ statusEl.textContent = 'Falta la ubicación: toca el mapa o busca una dirección.'; return; }
-  if(hasCapacity && needed <= 0){ statusEl.textContent = 'Indica cuántos voluntarios se necesitan.'; return; }
   if(!editorName){ statusEl.textContent = 'Escribe tu nombre para registrar el cambio.'; return; }
 
   currentUser = editorName;
@@ -922,7 +931,8 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     desc: document.getElementById('fDesc').value.trim(),
     addr: document.getElementById('fAddr').value.trim(),
     lat: pickedLat, lng: pickedLng,
-    needed, have: hasCapacity ? (parseInt(document.getElementById('fHave').value) || 0) : 0,
+    needed: hasCapacity ? 100 : 1, have: aforoPct,
+    needsVolunteers: hasCapacity ? document.getElementById('fNeedsVolunteers').value : null,
     severity: currentType === 'dano' ? document.getElementById('fSeverity').value : null,
     fotoUrl,
     supplies: currentType === 'acopio'
