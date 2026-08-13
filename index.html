@@ -3,7 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Mapa de Voluntariados</title>
+<title>Mapa de Ayuda Terremoto Colombia — Voluntariados, Acopio y Donaciones</title>
+<meta name="description" content="Mapa en vivo de centros de acopio, distribución, donación de sangre, eventos de recaudación y organismos institucionales para la emergencia del terremoto en Colombia. Actualizado por la comunidad en tiempo real.">
+<meta property="og:title" content="Mapa de Ayuda Terremoto Colombia">
+<meta property="og:description" content="Encuentra y actualiza en tiempo real centros de acopio, voluntariados, donación de sangre y más, por ciudad.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -38,9 +43,9 @@
   #mapSearchInput{flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--linea);border-radius:6px;font-size:0.85rem;}
   #mapSearchBtn{background:var(--verde);color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:600;cursor:pointer;font-size:0.85rem;}
   .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:3px;}
-  #layout{display:flex;height:calc(100vh - 156px);flex-wrap:wrap;}
+  #layout{display:flex;height:calc(100vh - 156px);flex-wrap:wrap;min-height:0;}
   #map{flex:1 1 55%;min-height:340px;}
-  #panel{flex:1 1 40%;min-width:300px;overflow-y:auto;padding:14px;border-left:1px solid var(--linea);background:#fff;}
+  #panel{flex:1 1 40%;min-width:300px;min-height:0;overflow-y:auto;padding:14px;border-left:1px solid var(--linea);background:#fff;}
   .card{border:1px solid var(--linea);border-left:5px solid var(--verde-claro);border-radius:6px;padding:12px;margin-bottom:12px;background:#fffdf8;}
   .card.urgente{border-left-color:var(--rojo-urgente);}
   .card.lleno{border-left-color:var(--azul-lleno);}
@@ -122,7 +127,7 @@
   @media (max-width:700px){
     #layout{flex-direction:column;height:auto;}
     #map{height:320px;}
-    #panel{border-left:none;border-top:1px solid var(--linea);max-height:60vh;}
+    #panel{border-left:none;border-top:1px solid var(--linea);max-height:60vh;min-height:0;}
     #filters .legend{margin-left:0;}
   }
 </style>
@@ -311,6 +316,7 @@
 const SUPABASE_URL = 'https://bwaugkjevaulpsayxxkw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3YXVna2pldmF1bHBzYXl4eGt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2NTE5MzIsImV4cCI6MjEwMjIyNzkzMn0.ZCGGb57s1ziVBj196Y_X3Yzf1cDj2SAYbw_hdW_AtgM';
 // ==================================================
+// =========================================================
 
 const sb = (SUPABASE_URL.startsWith('http'))
   ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -561,12 +567,10 @@ function igUrl(val){
 }
 function selectSite(id){
   selectedSiteId = id;
-  document.querySelectorAll('.card').forEach(c => c.classList.remove('card-selected'));
-  const card = document.getElementById('card-'+id);
-  if(!card) return;
-  void card.offsetWidth; // fuerza reinicio de la animación si ya estaba seleccionada
-  card.classList.add('card-selected');
-  card.scrollIntoView({behavior:'smooth', block:'center'});
+  render();
+  const panel = document.getElementById('panel');
+  panel.scrollIntoView({behavior:'smooth', block:'start'});
+  panel.scrollTo({top: 0, behavior: 'smooth'});
 }
 
 function render(){
@@ -583,7 +587,11 @@ function render(){
   if(document.getElementById('fltOrganismo').checked) activeTypes.add('organismo');
   if(document.getElementById('fltDano').checked) activeTypes.add('dano');
   const ocultarCerrados = document.getElementById('fltOcultarCerrados').checked;
-  const visible = sites.filter(s => activeTypes.has(s.type) && !(ocultarCerrados && s.estado === 'cerrado'));
+  let visible = sites.filter(s => activeTypes.has(s.type) && !(ocultarCerrados && s.estado === 'cerrado'));
+  if(selectedSiteId){
+    const idx = visible.findIndex(s => s.id === selectedSiteId);
+    if(idx > 0){ const [sel] = visible.splice(idx,1); visible.unshift(sel); }
+  }
 
   emptyEl.style.display = sites.length === 0 ? 'block' : 'none';
 
