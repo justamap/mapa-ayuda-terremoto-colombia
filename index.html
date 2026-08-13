@@ -98,6 +98,15 @@
   .estado-cerrado{background:#eee;color:#777;}
   .card.card-cerrando{opacity:0.85;border-left-style:dashed;}
   .card.card-cerrado{opacity:0.55;}
+  .card.card-selected{
+    border-left-color:var(--amarillo); border-left-width:8px;
+    box-shadow:0 0 0 3px rgba(227,169,59,0.35);
+    animation: flashSelect 0.9s ease;
+  }
+  @keyframes flashSelect{
+    0%{ background:#fdf3d8; }
+    100%{ background:#fffdf8; }
+  }
   .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
   .modal-actions button{padding:8px 14px;border-radius:5px;border:none;cursor:pointer;font-weight:600;}
   #cancelBtn,#nameCancelBtn{background:#eee;}
@@ -341,6 +350,7 @@ const DEPARTURE_LABELS = { avion: '✈️ Avión', ayuda: '🚛 Ayuda' };
 
 let sites = [];
 let map, markersLayer, locationPin, previewMarker;
+let selectedSiteId = null;
 let pickedLat = null, pickedLng = null;
 let currentType = 'acopio';
 let selectedSupplies = new Set();
@@ -549,6 +559,15 @@ function igUrl(val){
   const v = val.trim().replace(/^@/, '');
   return v.startsWith('http') ? v : `https://instagram.com/${v}`;
 }
+function selectSite(id){
+  selectedSiteId = id;
+  document.querySelectorAll('.card').forEach(c => c.classList.remove('card-selected'));
+  const card = document.getElementById('card-'+id);
+  if(!card) return;
+  void card.offsetWidth; // fuerza reinicio de la animación si ya estaba seleccionada
+  card.classList.add('card-selected');
+  card.scrollIntoView({behavior:'smooth', block:'center'});
+}
 
 function render(){
   markersLayer.clearLayers();
@@ -571,7 +590,7 @@ function render(){
   visible.forEach(site => {
     const marker = L.marker([site.lat, site.lng], {icon: iconFor(site)});
     marker.bindPopup(`<b>${escapeHtml(site.name)}</b><br>${escapeHtml(site.desc||'')}<br>Voluntarios: ${NEEDS_VOL_LABEL_FULL[site.needsVolunteers]||'Sí'} — ${pctOf(site)}% aforo`);
-    marker.on('click', () => document.getElementById('card-'+site.id)?.scrollIntoView({behavior:'smooth', block:'center'}));
+    marker.on('click', () => selectSite(site.id));
     markersLayer.addLayer(marker);
 
     const pct = pctOf(site);
@@ -625,7 +644,7 @@ function render(){
     const estadoClass = site.estado === 'cerrando' ? ' card-cerrando' : (site.estado === 'cerrado' ? ' card-cerrado' : '');
 
     const card = document.createElement('div');
-    card.className = 'card' + (cls ? ' '+cls : '') + estadoClass;
+    card.className = 'card' + (cls ? ' '+cls : '') + estadoClass + (site.id === selectedSiteId ? ' card-selected' : '');
     card.id = 'card-'+site.id;
     card.innerHTML = `
       <div class="tipo">${TYPE_LABEL[site.type] || ''}</div>
