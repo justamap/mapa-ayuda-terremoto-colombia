@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa de Voluntariados</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --verde:#1F3A2E; --verde-claro:#3C6B4F; --naranja:#B4552A; --amarillo:#E3A93B;
+    --papel:#F2EDE1; --tinta:#26261F; --rojo-urgente:#B23A2E; --azul-lleno:#2F6690; --linea:#D8CFB8;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:'Segoe UI',Roboto,Arial,sans-serif;background:var(--papel);color:var(--tinta);}
+  header{
+    background:var(--verde); color:var(--papel); padding:12px 20px;
+    display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;
+    border-bottom:4px solid var(--amarillo);
+  }
+  header h1{margin:0;font-size:1.25rem;}
+  header p{margin:2px 0 0 0;font-size:0.78rem;opacity:0.85;}
+  header .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+  #citySelect{padding:8px 10px;border-radius:6px;border:1px solid var(--linea);font-size:0.85rem;}
+  #addBtn{background:var(--amarillo);color:var(--tinta);border:none;padding:9px 14px;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.85rem;}
+  #filters{
+    display:flex; gap:12px; padding:8px 20px; background:#fff; border-bottom:1px solid var(--linea);
+    flex-wrap:wrap; align-items:center; font-size:0.82rem;
+  }
+  #filters label{display:flex;align-items:center;gap:5px;cursor:pointer;}
+  #filters .legend{display:flex;gap:10px;margin-left:auto;flex-wrap:wrap;font-size:0.72rem;color:#555;}
+  #syncStatus{font-size:0.7rem;color:#888;}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:3px;}
+  #layout{display:flex;height:calc(100vh - 108px);flex-wrap:wrap;}
+  #map{flex:1 1 55%;min-height:340px;}
+  #panel{flex:1 1 40%;min-width:300px;overflow-y:auto;padding:14px;border-left:1px solid var(--linea);background:#fff;}
+  .card{border:1px solid var(--linea);border-left:5px solid var(--verde-claro);border-radius:6px;padding:12px;margin-bottom:12px;background:#fffdf8;}
+  .card.urgente{border-left-color:var(--rojo-urgente);}
+  .card.lleno{border-left-color:var(--azul-lleno);}
+  .card .tipo{font-size:0.68rem;text-transform:uppercase;letter-spacing:0.5px;color:var(--naranja);font-weight:700;}
+  .card h3{margin:2px 0 4px 0;font-size:1rem;}
+  .card .meta{font-size:0.78rem;color:#555;margin-bottom:6px;}
+  .card p.desc{font-size:0.85rem;margin:6px 0;}
+  .barra-wrap{background:#e9e3d3;border-radius:4px;height:10px;overflow:hidden;margin:6px 0;}
+  .barra{height:100%;background:var(--verde-claro);}
+  .card.urgente .barra{background:var(--rojo-urgente);}
+  .card.lleno .barra{background:var(--azul-lleno);}
+  .supplies{margin:8px 0;}
+  .supplies .label{font-size:0.72rem;color:#777;margin-bottom:4px;}
+  .tags{display:flex;flex-wrap:wrap;gap:5px;}
+  .tag{border-radius:12px;padding:3px 9px;font-size:0.72rem;cursor:pointer;border:1px solid var(--rojo-urgente);background:#fbeae7;color:var(--rojo-urgente);}
+  .tag.covered{background:#eaf1ea;color:var(--verde-claro);border-color:var(--verde-claro);text-decoration:line-through;}
+  .row{display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;}
+  .row button{border:none;border-radius:5px;padding:6px 10px;cursor:pointer;font-weight:600;font-size:0.78rem;}
+  .btn-mas{background:var(--verde);color:#fff;}
+  .btn-menos{background:#ccc;color:#222;}
+  .btn-editar{background:var(--papel);border:1px solid var(--linea) !important;}
+  .btn-borrar{background:#fff;color:var(--rojo-urgente);border:1px solid var(--rojo-urgente) !important;}
+  .historial{font-size:0.7rem;color:#888;margin-top:8px;border-top:1px dashed var(--linea);padding-top:6px;}
+  .historial summary{cursor:pointer;font-weight:600;color:#555;}
+  .historial ul{margin:4px 0 0 0;padding-left:16px;}
+  #empty{text-align:center;color:#777;padding:40px 14px;font-size:0.9rem;}
+  #overlay,#nameOverlay{display:none;position:fixed;inset:0;background:rgba(20,20,15,0.55);align-items:center;justify-content:center;z-index:1000;padding:14px;}
+  #modal,#nameModal{background:#fff;border-radius:8px;padding:20px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;}
+  #modal h2,#nameModal h2{margin-top:0;font-size:1.1rem;}
+  #modal label{display:block;font-size:0.8rem;font-weight:600;margin:10px 0 4px;}
+  #modal input,#modal textarea,#modal select,#nameModal input{width:100%;padding:8px;border:1px solid var(--linea);border-radius:5px;font-size:0.85rem;font-family:inherit;}
+  #modal textarea{resize:vertical;min-height:50px;}
+  .hint{font-size:0.72rem;color:#777;margin-top:2px;}
+  .type-toggle{display:flex;gap:8px;margin-top:6px;}
+  .type-toggle button{flex:1;padding:8px;border-radius:6px;border:1px solid var(--linea);background:#fff;cursor:pointer;font-size:0.85rem;}
+  .type-toggle button.active{background:var(--verde);color:#fff;border-color:var(--verde);}
+  .chip-picker{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .chip-picker .chip{border:1px solid var(--linea);border-radius:12px;padding:4px 10px;font-size:0.76rem;cursor:pointer;background:#fff;}
+  .chip-picker .chip.selected{background:var(--naranja);color:#fff;border-color:var(--naranja);}
+  #departuresBlock .dep-form{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+  #departuresBlock .dep-form select{flex:1;min-width:110px;}
+  #departuresBlock .dep-form input{flex:2;min-width:120px;}
+  #departuresBlock .dep-list{display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+  .dep-item{
+    display:flex;justify-content:space-between;align-items:center;gap:8px;
+    border:1px solid var(--linea);border-radius:6px;padding:6px 10px;font-size:0.78rem;background:#faf7ee;
+  }
+  .dep-item button{border:none;background:none;color:var(--rojo-urgente);cursor:pointer;font-weight:700;}
+  .tag.avion{border-color:var(--azul-lleno);background:#eaf1f7;color:var(--azul-lleno);}
+  .tag.avion.covered{background:#eaf1ea;color:var(--verde-claro);border-color:var(--verde-claro);}
+  .tag.ayuda{border-color:var(--naranja);background:#fbeee6;color:var(--naranja);}
+  .tag.ayuda.covered{background:#eaf1ea;color:var(--verde-claro);border-color:var(--verde-claro);}
+  .estado-badge{font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:10px;display:inline-block;margin-bottom:4px;}
+  .estado-cerrando{background:#fbf1de;color:#8a6a1f;}
+  .estado-cerrado{background:#eee;color:#777;}
+  .card.card-cerrando{opacity:0.85;border-left-style:dashed;}
+  .card.card-cerrado{opacity:0.55;}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px;}
+  .modal-actions button{padding:8px 14px;border-radius:5px;border:none;cursor:pointer;font-weight:600;}
+  #cancelBtn,#nameCancelBtn{background:#eee;}
+  #saveBtn,#nameSaveBtn{background:var(--verde);color:#fff;}
+  #statusMsg,#nameStatus{font-size:0.75rem;color:#777;margin-top:6px;min-height:16px;}
+  .leaflet-div-icon-tag{color:#fff;font-weight:700;font-size:0.7rem;border-radius:5px;padding:3px 6px;text-align:center;white-space:nowrap;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,0.4);}
+  .badge-urgente{background:var(--rojo-urgente);}
+  .badge-medio{background:var(--amarillo);color:var(--tinta);}
+  .badge-lleno{background:var(--azul-lleno);}
+  #configWarning{
+    display:none; background:#fbeae7; color:var(--rojo-urgente); padding:12px 20px; font-size:0.85rem; border-bottom:1px solid var(--rojo-urgente);
+  }
+  @media (max-width:700px){
+    #layout{flex-direction:column;height:auto;}
+    #map{height:320px;}
+    #panel{border-left:none;border-top:1px solid var(--linea);max-height:60vh;}
+    #filters .legend{margin-left:0;}
+  }
+</style>
+</head>
+<body>
+
+<div id="configWarning">
+  ⚠️ Falta configurar Supabase: edita las constantes <code>SUPABASE_URL</code> y <code>SUPABASE_ANON_KEY</code> al inicio del archivo <code>index.html</code>.
+</div>
+
+<header>
+  <div>
+    <h1>🆘 Mapa de Voluntariados</h1>
+    <p>Centros de acopio, distribución y eventos recolectores. Cualquiera puede actualizar; queda registrado quién y cuándo.</p>
+  </div>
+  <div class="actions">
+    <select id="citySelect"></select>
+    <button id="addBtn">+ Agregar sitio</button>
+  </div>
+</header>
+
+<div id="filters">
+  <label><input type="checkbox" id="fltAcopio" checked> 📦 Acopio</label>
+  <label><input type="checkbox" id="fltDistribucion" checked> 🚚 Distribución</label>
+  <label><input type="checkbox" id="fltEvento" checked> 🎁 Eventos</label>
+  <label><input type="checkbox" id="fltSangre" checked> 🩸 Sangre</label>
+  <label><input type="checkbox" id="fltOrganismo" checked> 🏥 Organismos</label>
+  <label><input type="checkbox" id="fltDano" checked> 🏚️ Afectación</label>
+  <label><input type="checkbox" id="fltOcultarCerrados" checked> Ocultar cerrados</label>
+  <span id="syncStatus"></span>
+  <div class="legend">
+    <span><span class="dot" style="background:var(--rojo-urgente);"></span>Menos del 34%</span>
+    <span><span class="dot" style="background:var(--amarillo);"></span>34–99%</span>
+    <span><span class="dot" style="background:var(--azul-lleno);"></span>100% Lleno</span>
+  </div>
+</div>
+
+<div id="layout">
+  <div id="map"></div>
+  <div id="panel">
+    <div id="empty">Aún no hay sitios registrados en esta ciudad. Sé el primero en agregar uno.</div>
+    <div id="cards"></div>
+  </div>
+</div>
+
+<div id="overlay">
+  <div id="modal">
+    <h2 id="modalTitle">Agregar sitio</h2>
+    <input type="hidden" id="editId">
+
+    <label>Ciudad *</label>
+    <select id="fCity"></select>
+
+    <label>Tipo de sitio *</label>
+    <select id="fType">
+      <option value="acopio">📦 Centro de acopio</option>
+      <option value="distribucion">🚚 Centro de distribución</option>
+      <option value="evento">🎁 Evento recolector</option>
+      <option value="sangre">🩸 Donación de sangre</option>
+      <option value="organismo">🏥 Organismo de ayuda</option>
+      <option value="dano">🏚️ Reporte de afectación</option>
+    </select>
+
+    <label>Nombre del sitio *</label>
+    <input id="fName" placeholder="Ej: Punto de acopio Barrio X">
+
+    <label>Descripción</label>
+    <textarea id="fDesc" placeholder="¿Qué se está haciendo en este sitio?"></textarea>
+
+    <label>Dirección o referencia</label>
+    <input id="fAddr" placeholder="Ej: Cra 10 # 20-30">
+    <div class="hint">Escribe la dirección y presiona "Buscar", o toca directamente el mapa.</div>
+    <div class="row" style="margin-top:6px;">
+      <button type="button" id="searchAddrBtn" class="btn-editar">Buscar dirección</button>
+      <span id="coordsLabel" class="hint"></span>
+    </div>
+
+    <div id="eventBlock">
+      <label>Fecha y hora del evento</label>
+      <input id="fEventDate" type="datetime-local">
+    </div>
+
+    <div id="severityBlock">
+      <label>Nivel de afectación *</label>
+      <select id="fSeverity">
+        <option value="colapsada">🟥 Edificación colapsada</option>
+        <option value="grave">🟧 Afectación grave</option>
+        <option value="media">🟨 Afectación media</option>
+      </select>
+    </div>
+
+    <div id="capacityBlock">
+      <label>Voluntarios necesarios *</label>
+      <input id="fNeed" type="number" min="1" value="10">
+
+      <label>Voluntarios actuales</label>
+      <input id="fHave" type="number" min="0" value="0">
+    </div>
+
+    <div id="suppliesBlock">
+      <label>Insumos que se necesitan (toca para marcar)</label>
+      <div class="chip-picker" id="chipPicker"></div>
+      <div class="row" style="margin-top:6px;">
+        <input id="fCustomItem" placeholder="Otro insumo..." style="flex:1;">
+        <button type="button" id="addCustomItemBtn" class="btn-editar">Agregar</button>
+      </div>
+    </div>
+
+    <div id="departuresBlock">
+      <label>Salidas programadas (aviones o ayudas hacia otro destino)</label>
+      <div class="dep-form">
+        <select id="fDepType">
+          <option value="avion">✈️ Avión de salida</option>
+          <option value="ayuda">🚛 Ayuda de salida</option>
+        </select>
+        <input id="fDepDestino" placeholder="Destino (Ej: Cartagena)">
+      </div>
+      <div class="dep-form">
+        <input id="fDepDetalle" placeholder="Detalle opcional (hora, cantidad, qué lleva...)" style="flex:1;">
+        <button type="button" id="addDepBtn" class="btn-editar">+ Agregar salida</button>
+      </div>
+      <div class="dep-list" id="depList"></div>
+    </div>
+
+    <label>Contacto (opcional)</label>
+    <input id="fContact" placeholder="WhatsApp, nombre, línea...">
+
+    <label>Instagram (opcional)</label>
+    <input id="fInstagram" placeholder="usuario o link, ej: @cruzrojacolombia">
+
+    <label>Formulario (opcional)</label>
+    <input id="fFormulario" placeholder="Link a formulario, ej: https://forms.gle/...">
+
+    <label>Tu nombre *</label>
+    <input id="fEditorName" placeholder="Para registrar quién crea/edita este sitio">
+
+    <label>Estado del sitio</label>
+    <select id="fEstado">
+      <option value="activo">🟢 Activo</option>
+      <option value="cerrando">🟡 Cerrando gradualmente</option>
+      <option value="cerrado">⚫ Cerrado</option>
+    </select>
+
+    <div id="statusMsg"></div>
+    <div class="modal-actions">
+      <button id="cancelBtn">Cancelar</button>
+      <button id="saveBtn">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<div id="nameOverlay">
+  <div id="nameModal">
+    <h2>¿Quién actualiza?</h2>
+    <p class="hint">Escribe tu nombre para dejar registro del cambio (queda visible para todos).</p>
+    <input id="nameInput" placeholder="Tu nombre">
+    <div id="nameStatus" class="hint"></div>
+    <div class="modal-actions">
+      <button id="nameCancelBtn">Cancelar</button>
+      <button id="nameSaveBtn">Continuar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// =========================================================
+// CONFIGURA ESTO con los datos de tu proyecto en Supabase:
+// Settings → API → Project URL / anon public key
+// =========================================================
+const SUPABASE_URL = 'bwaugkjevaulpsayxxkw';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3YXVna2pldmF1bHBzYXl4eGt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2NTE5MzIsImV4cCI6MjEwMjIyNzkzMn0.ZCGGb57s1ziVBj196Y_X3Yzf1cDj2SAYbw_hdW_AtgM';
+// =========================================================
+
+const sb = (SUPABASE_URL.startsWith('http'))
+  ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+const CITIES = [
+  {name:'Bogotá', lat:4.7110, lng:-74.0721, zoom:12},
+  {name:'Medellín', lat:6.2442, lng:-75.5812, zoom:12},
+  {name:'Cali', lat:3.4516, lng:-76.5320, zoom:12},
+  {name:'Barranquilla', lat:10.9639, lng:-74.7964, zoom:12},
+  {name:'Cartagena', lat:10.3910, lng:-75.4794, zoom:12},
+  {name:'Bucaramanga', lat:7.1193, lng:-73.1227, zoom:12},
+  {name:'Cúcuta', lat:7.8939, lng:-72.5078, zoom:12},
+  {name:'Pereira', lat:4.8087, lng:-75.6906, zoom:12},
+  {name:'Santa Marta', lat:11.2408, lng:-74.1990, zoom:12},
+  {name:'Ibagué', lat:4.4389, lng:-75.2322, zoom:12},
+  {name:'Manizales', lat:5.0689, lng:-75.5174, zoom:12},
+  {name:'Villavicencio', lat:4.1420, lng:-73.6266, zoom:12},
+  {name:'Pasto', lat:1.2136, lng:-77.2811, zoom:12},
+  {name:'Montería', lat:8.7479, lng:-75.8814, zoom:12},
+  {name:'Neiva', lat:2.9273, lng:-75.2819, zoom:12},
+  {name:'Armenia', lat:4.5339, lng:-75.6811, zoom:12},
+  {name:'Popayán', lat:2.4448, lng:-76.6147, zoom:12},
+  {name:'Valledupar', lat:10.4631, lng:-73.2532, zoom:12},
+  {name:'Quibdó', lat:5.6947, lng:-76.6583, zoom:12},
+  {name:'Tunja', lat:5.5353, lng:-73.3678, zoom:12},
+];
+
+const SUPPLY_OPTIONS = [
+  'Agua potable','Alimentos no perecederos','Kits de aseo','Toallas higiénicas',
+  'Pañales bebé','Pañales adulto','Medicamentos básicos','Cobijas / frazadas',
+  'Colchonetas','Ropa de abrigo','Calzado','Linternas / pilas',
+  'Primeros auxilios','Combustible','Carpas / plástico','Alimento para mascotas'
+];
+
+const DEPARTURE_LABELS = { avion: '✈️ Avión', ayuda: '🚛 Ayuda' };
+
+let sites = [];
+let map, markersLayer;
+let pickedLat = null, pickedLng = null;
+let currentType = 'acopio';
+let selectedSupplies = new Set();
+let pendingDepartures = [];
+let currentUser = null;
+let pendingQuickAction = null;
+let selectedCity = CITIES[0].name;
+
+function populateCitySelects(){
+  const opts = CITIES.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+  document.getElementById('citySelect').innerHTML = opts;
+  document.getElementById('fCity').innerHTML = opts;
+  document.getElementById('citySelect').value = selectedCity;
+}
+
+function cityInfo(name){ return CITIES.find(c => c.name === name) || CITIES[0]; }
+
+function initMap(){
+  const c = cityInfo(selectedCity);
+  map = L.map('map').setView([c.lat, c.lng], c.zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19, attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+  markersLayer = L.layerGroup().addTo(map);
+
+  map.on('click', (e) => {
+    if(document.getElementById('overlay').style.display === 'flex'){
+      pickedLat = e.latlng.lat; pickedLng = e.latlng.lng;
+      document.getElementById('coordsLabel').textContent = `Ubicación elegida: ${pickedLat.toFixed(4)}, ${pickedLng.toFixed(4)}`;
+    } else {
+      openModal(null, e.latlng.lat, e.latlng.lng);
+    }
+  });
+}
+
+function pctOf(site){ return site.needed > 0 ? Math.min(100, Math.round((site.have/site.needed)*100)) : 100; }
+function badgeClass(pct){ if(pct>=100) return 'lleno'; if(pct<34) return 'urgente'; return ''; }
+
+const TYPE_EMOJI = { acopio:'📦', distribucion:'🚚', evento:'🎁', sangre:'🩸', organismo:'🏥', dano:'🏚️' };
+const TYPE_LABEL = {
+  acopio:'📦 Centro de acopio', distribucion:'🚚 Centro de distribución', evento:'🎁 Evento recolector',
+  sangre:'🩸 Donación de sangre', organismo:'🏥 Organismo de ayuda', dano:'🏚️ Reporte de afectación'
+};
+const CAPACITY_TYPES = ['acopio','distribucion','evento','sangre'];
+const SEVERITY_LABEL = { colapsada:'🟥 Edificación colapsada', grave:'🟧 Afectación grave', media:'🟨 Afectación media' };
+const SEVERITY_COLOR = { colapsada:'var(--rojo-urgente)', grave:'var(--naranja)', media:'var(--amarillo)' };
+
+function iconFor(site){
+  const emoji = TYPE_EMOJI[site.type] || '📍';
+  if(site.type === 'dano'){
+    return L.divIcon({
+      className:'', html:`<div class="leaflet-div-icon-tag" style="background:${SEVERITY_COLOR[site.severity]||'#888'}">${emoji} ${SEVERITY_LABEL[site.severity]?.replace(/^\S+\s/,'') || ''}</div>`,
+      iconSize:null, iconAnchor:[24,10]
+    });
+  }
+  if(site.type === 'organismo'){
+    return L.divIcon({
+      className:'', html:`<div class="leaflet-div-icon-tag" style="background:var(--verde-claro)">${emoji}</div>`,
+      iconSize:null, iconAnchor:[24,10]
+    });
+  }
+  const pct = pctOf(site);
+  const cls = pct>=100 ? 'badge-lleno' : (pct<34 ? 'badge-urgente' : 'badge-medio');
+  const label = pct>=100 ? '100% Lleno' : `${pct}%`;
+  return L.divIcon({
+    className:'', html:`<div class="leaflet-div-icon-tag ${cls}">${emoji} ${label}</div>`,
+    iconSize:null, iconAnchor:[24,10]
+  });
+}
+
+// ---------- Datos: Supabase ----------
+async function loadSites(){
+  document.getElementById('syncStatus').textContent = 'Cargando...';
+  if(!sb){
+    document.getElementById('configWarning').style.display = 'block';
+    sites = [];
+    render();
+    return;
+  }
+  const { data, error } = await sb
+    .from('sites')
+    .select('*')
+    .eq('city', selectedCity)
+    .eq('archived', false)
+    .order('created_at', {ascending:true});
+  if(error){
+    document.getElementById('syncStatus').textContent = 'Error de conexión con Supabase.';
+    console.error(error);
+    return;
+  }
+  sites = data.map(rowToSite);
+  document.getElementById('syncStatus').textContent = 'Actualizado ✓';
+  render();
+}
+
+function rowToSite(row){
+  return {
+    id: row.id, city: row.city, type: row.type, name: row.name,
+    desc: row.description, addr: row.address, lat: row.lat, lng: row.lng,
+    needed: row.needed, have: row.have, supplies: row.supplies || [],
+    departures: row.departures || [], eventTime: row.event_time, severity: row.severity,
+    estado: row.estado || 'activo',
+    contact: row.contact, instagram: row.instagram, formulario: row.formulario, history: row.history || []
+  };
+}
+
+async function insertSite(site){
+  const { error } = await sb.from('sites').insert([{
+    city: site.city, type: site.type, name: site.name, description: site.desc,
+    address: site.addr, lat: site.lat, lng: site.lng, needed: site.needed,
+    have: site.have, supplies: site.supplies, departures: site.departures,
+    event_time: site.eventTime || null, severity: site.severity || null, estado: site.estado || 'activo',
+    contact: site.contact, instagram: site.instagram, formulario: site.formulario, history: site.history
+  }]);
+  return error;
+}
+
+async function updateSite(site){
+  const { error } = await sb.from('sites').update({
+    type: site.type, name: site.name, description: site.desc, address: site.addr,
+    lat: site.lat, lng: site.lng, needed: site.needed, have: site.have,
+    supplies: site.supplies, departures: site.departures, event_time: site.eventTime || null,
+    severity: site.severity || null, estado: site.estado || 'activo',
+    contact: site.contact, instagram: site.instagram, formulario: site.formulario, history: site.history
+  }).eq('id', site.id);
+  return error;
+}
+
+async function archiveSite(id){
+  const { error } = await sb.from('sites').update({ archived: true }).eq('id', id);
+  return error;
+}
+
+function subscribeRealtime(){
+  if(!sb) return;
+  sb.channel('sites-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'sites' }, () => {
+      loadSites();
+    })
+    .subscribe();
+  // Respaldo por si el realtime no está activado en el proyecto:
+  setInterval(loadSites, 25000);
+}
+
+// ---------- Render ----------
+function timeAgo(ts){
+  const diffMin = Math.round((Date.now()-new Date(ts).getTime())/60000);
+  if(diffMin < 1) return 'hace un momento';
+  if(diffMin < 60) return `hace ${diffMin} min`;
+  const diffH = Math.round(diffMin/60);
+  if(diffH < 24) return `hace ${diffH} h`;
+  return `hace ${Math.round(diffH/24)} d`;
+}
+function escapeHtml(str){ const d = document.createElement('div'); d.textContent = str || ''; return d.innerHTML; }
+function igUrl(val){
+  const v = val.trim().replace(/^@/, '');
+  return v.startsWith('http') ? v : `https://instagram.com/${v}`;
+}
+
+function render(){
+  markersLayer.clearLayers();
+  const cardsEl = document.getElementById('cards');
+  const emptyEl = document.getElementById('empty');
+  cardsEl.innerHTML = '';
+
+  const activeTypes = new Set();
+  if(document.getElementById('fltAcopio').checked) activeTypes.add('acopio');
+  if(document.getElementById('fltDistribucion').checked) activeTypes.add('distribucion');
+  if(document.getElementById('fltEvento').checked) activeTypes.add('evento');
+  if(document.getElementById('fltSangre').checked) activeTypes.add('sangre');
+  if(document.getElementById('fltOrganismo').checked) activeTypes.add('organismo');
+  if(document.getElementById('fltDano').checked) activeTypes.add('dano');
+  const ocultarCerrados = document.getElementById('fltOcultarCerrados').checked;
+  const visible = sites.filter(s => activeTypes.has(s.type) && !(ocultarCerrados && s.estado === 'cerrado'));
+
+  emptyEl.style.display = sites.length === 0 ? 'block' : 'none';
+
+  visible.forEach(site => {
+    const marker = L.marker([site.lat, site.lng], {icon: iconFor(site)});
+    marker.bindPopup(`<b>${escapeHtml(site.name)}</b><br>${escapeHtml(site.desc||'')}<br>Voluntarios: ${site.have}/${site.needed}`);
+    marker.on('click', () => document.getElementById('card-'+site.id)?.scrollIntoView({behavior:'smooth', block:'center'}));
+    markersLayer.addLayer(marker);
+
+    const pct = pctOf(site);
+    const cls = site.type === 'dano' ? '' : badgeClass(pct);
+    const hasCapacity = CAPACITY_TYPES.includes(site.type);
+    const supplies = site.supplies || [];
+    const suppliesHtml = supplies.length ? `
+      <div class="supplies">
+        <div class="label">Insumos necesarios (toca para marcar como cubierto):</div>
+        <div class="tags">
+          ${supplies.map((sup,i) => `<span class="tag ${sup.covered?'covered':''}" data-act="toggle-supply" data-id="${site.id}" data-idx="${i}">${escapeHtml(sup.name)}</span>`).join('')}
+        </div>
+      </div>` : '';
+
+    const departures = site.departures || [];
+    const departuresHtml = departures.length ? `
+      <div class="supplies">
+        <div class="label">Salidas programadas (toca para marcar como salió):</div>
+        <div class="tags">
+          ${departures.map((d,i) => `<span class="tag ${d.tipo} ${d.done?'covered':''}" data-act="toggle-departure" data-id="${site.id}" data-idx="${i}">${DEPARTURE_LABELS[d.tipo]||''} a ${escapeHtml(d.destino)}${d.detalle ? ' — '+escapeHtml(d.detalle) : ''}</span>`).join('')}
+        </div>
+      </div>` : '';
+
+    const eventDateHtml = site.type === 'evento' && site.eventTime
+      ? `<div class="meta">📅 ${new Date(site.eventTime).toLocaleString('es-CO', {dateStyle:'medium', timeStyle:'short'})}</div>`
+      : '';
+
+    const severityHtml = site.type === 'dano'
+      ? `<div class="meta" style="font-weight:700;color:${SEVERITY_COLOR[site.severity]||'#555'}">${SEVERITY_LABEL[site.severity] || ''}</div>`
+      : '';
+
+    const capacityHtml = hasCapacity ? `
+      <div class="barra-wrap"><div class="barra" style="width:${pct}%"></div></div>
+      <div class="meta">${site.have} de ${site.needed} voluntarios (${pct>=100?'100% Lleno':pct+'%'})${site.contact ? ' · Contacto: '+escapeHtml(site.contact) : ''}</div>
+    ` : (site.contact ? `<div class="meta">Contacto: ${escapeHtml(site.contact)}</div>` : '');
+
+    const history = (site.history || []).slice(-5).reverse();
+    const historyHtml = history.length ? `
+      <details class="historial">
+        <summary>Historial de cambios (${(site.history||[]).length})</summary>
+        <ul>${history.map(h => `<li>${escapeHtml(h.action)} — ${escapeHtml(h.by)}, ${timeAgo(h.ts)}</li>`).join('')}</ul>
+      </details>` : '';
+
+    const lastEdit = site.history && site.history.length ? site.history[site.history.length-1] : null;
+
+    const estadoBadgeHtml = site.estado === 'cerrando'
+      ? `<span class="estado-badge estado-cerrando">🟡 Cerrando gradualmente</span>`
+      : site.estado === 'cerrado'
+      ? `<span class="estado-badge estado-cerrado">⚫ Cerrado</span>`
+      : '';
+    const estadoClass = site.estado === 'cerrando' ? ' card-cerrando' : (site.estado === 'cerrado' ? ' card-cerrado' : '');
+
+    const card = document.createElement('div');
+    card.className = 'card' + (cls ? ' '+cls : '') + estadoClass;
+    card.id = 'card-'+site.id;
+    card.innerHTML = `
+      <div class="tipo">${TYPE_LABEL[site.type] || ''}</div>
+      ${estadoBadgeHtml}
+      <h3>${escapeHtml(site.name)}</h3>
+      <div class="meta">${escapeHtml(site.addr||'')}</div>
+      ${eventDateHtml}
+      ${severityHtml}
+      ${site.desc ? `<p class="desc">${escapeHtml(site.desc)}</p>` : ''}
+      ${capacityHtml}
+      ${site.instagram ? `<div class="meta"><a href="${igUrl(site.instagram)}" target="_blank" rel="noopener">📷 Ver Instagram</a></div>` : ''}
+      ${site.formulario ? `<div class="meta"><a href="${escapeHtml(site.formulario)}" target="_blank" rel="noopener">📋 Ver formulario</a></div>` : ''}
+      ${suppliesHtml}
+      ${departuresHtml}
+      <div class="row">
+        ${hasCapacity ? `
+        <button class="btn-mas" data-act="mas" data-id="${site.id}">+1 voluntario</button>
+        <button class="btn-menos" data-act="menos" data-id="${site.id}">-1</button>` : ''}
+        <button class="btn-editar" data-act="editar" data-id="${site.id}">Editar</button>
+        <button class="btn-borrar" data-act="borrar" data-id="${site.id}">Archivar</button>
+      </div>
+      ${lastEdit ? `<div class="meta" style="margin-top:6px;">Última actualización: ${escapeHtml(lastEdit.by)}, ${timeAgo(lastEdit.ts)}</div>` : ''}
+      ${historyHtml}
+    `;
+    cardsEl.appendChild(card);
+  });
+}
+
+// ---------- Acciones sobre tarjetas ----------
+document.getElementById('cards').addEventListener('click', (e) => {
+  const el = e.target.closest('[data-act]');
+  if(!el) return;
+  const id = el.dataset.id, act = el.dataset.act, idx = el.dataset.idx;
+  requireName(async () => {
+    const site = sites.find(s => s.id === id);
+    if(!site) return;
+    if(act === 'mas'){
+      site.have += 1;
+      logChange(site, `sumó 1 voluntario (${site.have}/${site.needed})`);
+      await updateSite(site);
+    } else if(act === 'menos'){
+      site.have = Math.max(0, site.have - 1);
+      logChange(site, `quitó 1 voluntario (${site.have}/${site.needed})`);
+      await updateSite(site);
+    } else if(act === 'editar'){
+      openModal(site); return;
+    } else if(act === 'borrar'){
+      if(confirm(`¿Archivar "${site.name}"? Dejará de verse en el mapa pero no se borra de la base de datos.`)){
+        await archiveSite(id);
+      }
+      await loadSites();
+      return;
+    } else if(act === 'toggle-supply'){
+      const sup = site.supplies[idx];
+      sup.covered = !sup.covered;
+      logChange(site, `marcó "${sup.name}" como ${sup.covered ? 'cubierto' : 'necesario'}`);
+      await updateSite(site);
+    } else if(act === 'toggle-departure'){
+      const dep = site.departures[idx];
+      dep.done = !dep.done;
+      logChange(site, `marcó salida ${DEPARTURE_LABELS[dep.tipo]||''} a ${dep.destino} como ${dep.done ? 'salió' : 'pendiente'}`);
+      await updateSite(site);
+    }
+    await loadSites();
+  });
+});
+
+function logChange(site, action){
+  site.history = site.history || [];
+  site.history.push({ts: new Date().toISOString(), by: currentUser, action});
+}
+
+function requireName(callback){
+  if(currentUser){ callback(); return; }
+  pendingQuickAction = callback;
+  document.getElementById('nameOverlay').style.display = 'flex';
+  document.getElementById('nameInput').value = '';
+  document.getElementById('nameStatus').textContent = '';
+  document.getElementById('nameInput').focus();
+}
+document.getElementById('nameCancelBtn').addEventListener('click', () => {
+  document.getElementById('nameOverlay').style.display = 'none';
+  pendingQuickAction = null;
+});
+document.getElementById('nameSaveBtn').addEventListener('click', () => {
+  const val = document.getElementById('nameInput').value.trim();
+  if(!val){ document.getElementById('nameStatus').textContent = 'Escribe tu nombre para continuar.'; return; }
+  currentUser = val;
+  document.getElementById('nameOverlay').style.display = 'none';
+  if(pendingQuickAction){ pendingQuickAction(); pendingQuickAction = null; }
+});
+
+// ---------- Filtros y ciudad ----------
+document.getElementById('fltAcopio').addEventListener('change', render);
+document.getElementById('fltDistribucion').addEventListener('change', render);
+document.getElementById('fltEvento').addEventListener('change', render);
+document.getElementById('fltSangre').addEventListener('change', render);
+document.getElementById('fltOrganismo').addEventListener('change', render);
+document.getElementById('fltDano').addEventListener('change', render);
+document.getElementById('fltOcultarCerrados').addEventListener('change', render);
+document.getElementById('citySelect').addEventListener('change', (e) => {
+  selectedCity = e.target.value;
+  const c = cityInfo(selectedCity);
+  map.setView([c.lat, c.lng], c.zoom);
+  loadSites();
+});
+
+// ---------- Modal de sitio ----------
+function renderChipPicker(){
+  const picker = document.getElementById('chipPicker');
+  picker.innerHTML = '';
+  SUPPLY_OPTIONS.forEach(name => {
+    const chip = document.createElement('span');
+    chip.className = 'chip' + (selectedSupplies.has(name) ? ' selected' : '');
+    chip.textContent = name;
+    chip.addEventListener('click', () => {
+      if(selectedSupplies.has(name)) selectedSupplies.delete(name);
+      else selectedSupplies.add(name);
+      renderChipPicker();
+    });
+    picker.appendChild(chip);
+  });
+  [...selectedSupplies].filter(n => !SUPPLY_OPTIONS.includes(n)).forEach(name => {
+    const chip = document.createElement('span');
+    chip.className = 'chip selected';
+    chip.textContent = name;
+    chip.addEventListener('click', () => { selectedSupplies.delete(name); renderChipPicker(); });
+    picker.appendChild(chip);
+  });
+}
+document.getElementById('addCustomItemBtn').addEventListener('click', () => {
+  const input = document.getElementById('fCustomItem');
+  const val = input.value.trim();
+  if(val){ selectedSupplies.add(val); input.value=''; renderChipPicker(); }
+});
+
+function renderDepList(){
+  const list = document.getElementById('depList');
+  list.innerHTML = '';
+  pendingDepartures.forEach((d, i) => {
+    const row = document.createElement('div');
+    row.className = 'dep-item';
+    row.innerHTML = `<span>${DEPARTURE_LABELS[d.tipo]||''} a ${escapeHtml(d.destino)}${d.detalle ? ' — '+escapeHtml(d.detalle) : ''}</span>`;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = '✕';
+    btn.addEventListener('click', () => { pendingDepartures.splice(i,1); renderDepList(); });
+    row.appendChild(btn);
+    list.appendChild(row);
+  });
+}
+document.getElementById('addDepBtn').addEventListener('click', () => {
+  const tipo = document.getElementById('fDepType').value;
+  const destino = document.getElementById('fDepDestino').value.trim();
+  const detalle = document.getElementById('fDepDetalle').value.trim();
+  if(!destino){ document.getElementById('fDepDestino').focus(); return; }
+  pendingDepartures.push({tipo, destino, detalle, done:false});
+  document.getElementById('fDepDestino').value = '';
+  document.getElementById('fDepDetalle').value = '';
+  renderDepList();
+});
+
+function setType(type){
+  currentType = type;
+  document.getElementById('fType').value = type;
+  document.getElementById('suppliesBlock').style.display = type === 'acopio' ? 'block' : 'none';
+  document.getElementById('departuresBlock').style.display = (type === 'acopio' || type === 'distribucion') ? 'block' : 'none';
+  document.getElementById('eventBlock').style.display = type === 'evento' ? 'block' : 'none';
+  document.getElementById('severityBlock').style.display = type === 'dano' ? 'block' : 'none';
+  document.getElementById('capacityBlock').style.display = CAPACITY_TYPES.includes(type) ? 'block' : 'none';
+}
+document.getElementById('fType').addEventListener('change', (e) => setType(e.target.value));
+
+function openModal(site, lat, lng){
+  document.getElementById('overlay').style.display = 'flex';
+  document.getElementById('modalTitle').textContent = site ? 'Editar sitio' : 'Agregar sitio';
+  document.getElementById('editId').value = site ? site.id : '';
+  document.getElementById('fCity').value = site ? site.city : selectedCity;
+  document.getElementById('fName').value = site ? site.name : '';
+  document.getElementById('fDesc').value = site ? site.desc : '';
+  document.getElementById('fAddr').value = site ? site.addr : '';
+  document.getElementById('fNeed').value = site ? site.needed : 10;
+  document.getElementById('fHave').value = site ? site.have : 0;
+  document.getElementById('fContact').value = site ? site.contact : '';
+  document.getElementById('fInstagram').value = site ? (site.instagram || '') : '';
+  document.getElementById('fFormulario').value = site ? (site.formulario || '') : '';
+  document.getElementById('fEditorName').value = currentUser || '';
+  document.getElementById('fEstado').value = site ? (site.estado || 'activo') : 'activo';
+  document.getElementById('statusMsg').textContent = '';
+
+  setType(site ? site.type : 'acopio');
+  selectedSupplies = new Set(site && site.supplies ? site.supplies.map(s => s.name) : []);
+  renderChipPicker();
+
+  pendingDepartures = site && site.departures ? JSON.parse(JSON.stringify(site.departures)) : [];
+  renderDepList();
+  document.getElementById('fEventDate').value = site && site.eventTime
+    ? new Date(site.eventTime).toISOString().slice(0,16)
+    : '';
+  document.getElementById('fSeverity').value = site && site.severity ? site.severity : 'colapsada';
+
+  pickedLat = site ? site.lat : (lat !== undefined ? lat : null);
+  pickedLng = site ? site.lng : (lng !== undefined ? lng : null);
+  document.getElementById('coordsLabel').textContent = pickedLat
+    ? `Ubicación: ${pickedLat.toFixed(4)}, ${pickedLng.toFixed(4)}`
+    : 'Toca el mapa para elegir ubicación, o busca una dirección abajo.';
+}
+function closeModal(){ document.getElementById('overlay').style.display = 'none'; }
+
+document.getElementById('addBtn').addEventListener('click', () => openModal(null));
+document.getElementById('cancelBtn').addEventListener('click', closeModal);
+
+document.getElementById('searchAddrBtn').addEventListener('click', async () => {
+  const addr = document.getElementById('fAddr').value.trim();
+  if(!addr) return;
+  const city = document.getElementById('fCity').value;
+  const statusEl = document.getElementById('statusMsg');
+  statusEl.textContent = 'Buscando dirección...';
+  try{
+    const q = encodeURIComponent(addr + ', ' + city + ', Colombia');
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=1`);
+    const data = await res.json();
+    if(data && data.length > 0){
+      pickedLat = parseFloat(data[0].lat); pickedLng = parseFloat(data[0].lon);
+      document.getElementById('coordsLabel').textContent = `Ubicación encontrada: ${pickedLat.toFixed(4)}, ${pickedLng.toFixed(4)}`;
+      map.setView([pickedLat, pickedLng], 15);
+      statusEl.textContent = '';
+    } else {
+      statusEl.textContent = 'No se encontró la dirección. Toca el mapa para ubicarla manualmente.';
+    }
+  }catch(e){
+    statusEl.textContent = 'Error buscando la dirección. Toca el mapa para ubicarla manualmente.';
+  }
+});
+
+document.getElementById('saveBtn').addEventListener('click', async () => {
+  const statusEl = document.getElementById('statusMsg');
+  if(!sb){ statusEl.textContent = 'Falta configurar Supabase (ver arriba del archivo).'; return; }
+
+  const name = document.getElementById('fName').value.trim();
+  const hasCapacity = CAPACITY_TYPES.includes(currentType);
+  const needed = hasCapacity ? (parseInt(document.getElementById('fNeed').value) || 0) : 1;
+  const editorName = document.getElementById('fEditorName').value.trim();
+  const city = document.getElementById('fCity').value;
+
+  if(!name){ statusEl.textContent = 'Falta el nombre del sitio.'; return; }
+  if(pickedLat === null || pickedLng === null){ statusEl.textContent = 'Falta la ubicación: toca el mapa o busca una dirección.'; return; }
+  if(hasCapacity && needed <= 0){ statusEl.textContent = 'Indica cuántos voluntarios se necesitan.'; return; }
+  if(!editorName){ statusEl.textContent = 'Escribe tu nombre para registrar el cambio.'; return; }
+
+  currentUser = editorName;
+  const id = document.getElementById('editId').value;
+  const isNew = !id;
+  const existing = sites.find(s => s.id === id);
+
+  const data = {
+    id: id || undefined,
+    city, type: currentType, name,
+    desc: document.getElementById('fDesc').value.trim(),
+    addr: document.getElementById('fAddr').value.trim(),
+    lat: pickedLat, lng: pickedLng,
+    needed, have: hasCapacity ? (parseInt(document.getElementById('fHave').value) || 0) : 0,
+    severity: currentType === 'dano' ? document.getElementById('fSeverity').value : null,
+    supplies: currentType === 'acopio'
+      ? [...selectedSupplies].map(n => {
+          const prev = existing && existing.supplies ? existing.supplies.find(s => s.name === n) : null;
+          return {name: n, covered: prev ? prev.covered : false};
+        })
+      : [],
+    departures: (currentType === 'acopio' || currentType === 'distribucion') ? pendingDepartures : [],
+    eventTime: currentType === 'evento' && document.getElementById('fEventDate').value
+      ? new Date(document.getElementById('fEventDate').value).toISOString()
+      : null,
+    contact: document.getElementById('fContact').value.trim(),
+    instagram: document.getElementById('fInstagram').value.trim(),
+    formulario: document.getElementById('fFormulario').value.trim(),
+    estado: document.getElementById('fEstado').value,
+    history: existing ? (existing.history || []) : []
+  };
+  if(existing && existing.estado !== data.estado){
+    const labelMap = {activo:'Activo', cerrando:'Cerrando gradualmente', cerrado:'Cerrado'};
+    data.history.push({ts: new Date().toISOString(), by: editorName, action: `cambió el estado a "${labelMap[data.estado]}"`});
+  }
+  data.history.push({ts: new Date().toISOString(), by: editorName, action: isNew ? 'creó el sitio' : 'editó los datos del sitio'});
+
+  statusEl.textContent = 'Guardando...';
+  let error;
+  if(isNew){ error = await insertSite(data); }
+  else{ error = await updateSite(data); }
+
+  if(error){
+    statusEl.textContent = 'Error guardando: ' + error.message;
+    return;
+  }
+  closeModal();
+  if(city !== selectedCity){
+    selectedCity = city;
+    document.getElementById('citySelect').value = city;
+    const c = cityInfo(city);
+    map.setView([c.lat, c.lng], c.zoom);
+  }
+  await loadSites();
+});
+
+populateCitySelects();
+initMap();
+loadSites();
+subscribeRealtime();
+</script>
+</body>
+</html>
