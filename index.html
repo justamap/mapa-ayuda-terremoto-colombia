@@ -445,10 +445,9 @@ function iconFor(site){
   }
   const pct = pctOf(site);
   const cls = pct>=100 ? 'badge-lleno' : (pct<34 ? 'badge-urgente' : 'badge-medio');
-  const label = pct>=100 ? '100% Lleno' : `${pct}%`;
   return L.divIcon({
-    className:'', html:`<div class="leaflet-div-icon-tag ${cls}" style="white-space:normal;text-align:center;line-height:1.3;"><div>${emoji}</div><div style="font-size:0.68em;">Voluntarios ${label}</div></div>`,
-    iconSize:null, iconAnchor:[24,14]
+    className:'', html:`<div class="leaflet-div-icon-tag ${cls}" style="white-space:normal;text-align:center;line-height:1.3;"><div>${emoji}</div><div style="font-size:0.68em;">Voluntarios requeridos: ${site.needed}</div><div style="font-size:0.68em;">${pct}% actual</div></div>`,
+    iconSize:null, iconAnchor:[24,18]
   });
 }
 
@@ -561,7 +560,7 @@ function render(){
 
   visible.forEach(site => {
     const marker = L.marker([site.lat, site.lng], {icon: iconFor(site)});
-    marker.bindPopup(`<b>${escapeHtml(site.name)}</b><br>${escapeHtml(site.desc||'')}<br>Voluntarios: ${site.have}/${site.needed}`);
+    marker.bindPopup(`<b>${escapeHtml(site.name)}</b><br>${escapeHtml(site.desc||'')}<br>Voluntarios requeridos: ${site.have}/${site.needed}`);
     marker.on('click', () => document.getElementById('card-'+site.id)?.scrollIntoView({behavior:'smooth', block:'center'}));
     markersLayer.addLayer(marker);
 
@@ -596,7 +595,7 @@ function render(){
 
     const capacityHtml = hasCapacity ? `
       <div class="barra-wrap"><div class="barra" style="width:${pct}%"></div></div>
-      <div class="meta">${site.have} de ${site.needed} voluntarios (${pct>=100?'100% Lleno':pct+'%'})${site.contact ? ' · Contacto: '+escapeHtml(site.contact) : ''}</div>
+      <div class="meta">Voluntarios requeridos: ${site.needed} · ${pct}% actual (${site.have} de ${site.needed})${site.contact ? ' · Contacto: '+escapeHtml(site.contact) : ''}</div>
     ` : (site.contact ? `<div class="meta">Contacto: ${escapeHtml(site.contact)}</div>` : '');
 
     const history = (site.history || []).slice(-5).reverse();
