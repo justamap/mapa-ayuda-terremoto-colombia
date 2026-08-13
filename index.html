@@ -253,6 +253,12 @@
     <label>Formulario (opcional)</label>
     <input id="fFormulario" placeholder="Link a formulario, ej: https://forms.gle/...">
 
+    <label>Foto (opcional, útil si no hay tiempo de llenar todo)</label>
+    <input id="fFoto" type="file" accept="image/*">
+    <div id="fotoPreviewWrap" style="display:none;margin-top:6px;">
+      <img id="fotoPreview" style="max-width:100%;border-radius:6px;border:1px solid var(--linea);">
+    </div>
+
     <label>Tu nombre *</label>
     <input id="fEditorName" placeholder="Para registrar quién crea/edita este sitio">
 
@@ -478,7 +484,7 @@ function rowToSite(row){
     needed: row.needed, have: row.have, supplies: row.supplies || [],
     departures: row.departures || [], eventTime: row.event_time, severity: row.severity,
     estado: row.estado || 'activo',
-    contact: row.contact, instagram: row.instagram, formulario: row.formulario, history: row.history || []
+    contact: row.contact, instagram: row.instagram, formulario: row.formulario, fotoUrl: row.foto_url, history: row.history || []
   };
 }
 
@@ -488,7 +494,7 @@ async function insertSite(site){
     address: site.addr, lat: site.lat, lng: site.lng, needed: site.needed,
     have: site.have, supplies: site.supplies, departures: site.departures,
     event_time: site.eventTime || null, severity: site.severity || null, estado: site.estado || 'activo',
-    contact: site.contact, instagram: site.instagram, formulario: site.formulario, history: site.history
+    contact: site.contact, instagram: site.instagram, formulario: site.formulario, foto_url: site.fotoUrl || null, history: site.history
   }]);
   return error;
 }
@@ -499,7 +505,7 @@ async function updateSite(site){
     lat: site.lat, lng: site.lng, needed: site.needed, have: site.have,
     supplies: site.supplies, departures: site.departures, event_time: site.eventTime || null,
     severity: site.severity || null, estado: site.estado || 'activo',
-    contact: site.contact, instagram: site.instagram, formulario: site.formulario, history: site.history
+    contact: site.contact, instagram: site.instagram, formulario: site.formulario, foto_url: site.fotoUrl || null, history: site.history
   }).eq('id', site.id);
   return error;
 }
@@ -620,6 +626,7 @@ function render(){
       ${eventDateHtml}
       ${severityHtml}
       ${site.desc ? `<p class="desc">${escapeHtml(site.desc)}</p>` : ''}
+      ${site.fotoUrl ? `<img src="${escapeHtml(site.fotoUrl)}" alt="Foto del sitio" style="width:100%;border-radius:6px;margin:6px 0;">` : ''}
       ${capacityHtml}
       ${site.instagram ? `<div class="meta"><a href="${igUrl(site.instagram)}" target="_blank" rel="noopener">📷 Ver Instagram</a></div>` : ''}
       ${site.formulario ? `<div class="meta"><a href="${escapeHtml(site.formulario)}" target="_blank" rel="noopener">📋 Ver formulario</a></div>` : ''}
@@ -798,6 +805,15 @@ function openModal(site, lat, lng){
   document.getElementById('fContact').value = site ? site.contact : '';
   document.getElementById('fInstagram').value = site ? (site.instagram || '') : '';
   document.getElementById('fFormulario').value = site ? (site.formulario || '') : '';
+  document.getElementById('fFoto').value = '';
+  pendingFotoFile = null;
+  const wrap = document.getElementById('fotoPreviewWrap');
+  if(site && site.fotoUrl){
+    document.getElementById('fotoPreview').src = site.fotoUrl;
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+  }
   document.getElementById('fEditorName').value = currentUser || '';
   document.getElementById('fEstado').value = site ? (site.estado || 'activo') : 'activo';
   document.getElementById('statusMsg').textContent = '';
@@ -828,6 +844,28 @@ function closeModal(){
 
 document.getElementById('addBtn').addEventListener('click', () => openModal(null));
 document.getElementById('cancelBtn').addEventListener('click', closeModal);
+
+let pendingFotoFile = null;
+document.getElementById('fFoto').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  pendingFotoFile = file || null;
+  const wrap = document.getElementById('fotoPreviewWrap');
+  if(file){
+    document.getElementById('fotoPreview').src = URL.createObjectURL(file);
+    wrap.style.display = 'block';
+  } else {
+    wrap.style.display = 'none';
+  }
+});
+
+async function subirFoto(file){
+  const ext = file.name.split('.').pop();
+  const path = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const { error } = await sb.storage.from('fotos').upload(path, file);
+  if(error) return { url: null, error };
+  const { data } = sb.storage.from('fotos').getPublicUrl(path);
+  return { url: data.publicUrl, error: null };
+}
 
 document.getElementById('searchAddrBtn').addEventListener('click', async () => {
   const addr = document.getElementById('fAddr').value.trim();
@@ -871,6 +909,14 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
   const isNew = !id;
   const existing = sites.find(s => s.id === id);
 
+  let fotoUrl = existing ? existing.fotoUrl : null;
+  if(pendingFotoFile){
+    statusEl.textContent = 'Subiendo foto...';
+    const { url, error: fotoError } = await subirFoto(pendingFotoFile);
+    if(fotoError){ statusEl.textContent = 'Error subiendo la foto: ' + fotoError.message; return; }
+    fotoUrl = url;
+  }
+
   const data = {
     id: id || undefined,
     city, type: currentType, name,
@@ -879,6 +925,7 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
     lat: pickedLat, lng: pickedLng,
     needed, have: hasCapacity ? (parseInt(document.getElementById('fHave').value) || 0) : 0,
     severity: currentType === 'dano' ? document.getElementById('fSeverity').value : null,
+    fotoUrl,
     supplies: currentType === 'acopio'
       ? [...selectedSupplies].map(n => {
           const prev = existing && existing.supplies ? existing.supplies.find(s => s.name === n) : null;
