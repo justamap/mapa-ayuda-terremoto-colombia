@@ -147,7 +147,7 @@
   <div class="actions">
     <select id="citySelect"></select>
     <button id="addBtn">+ Agregar sitio</button>
-    <button id="bulkImportBtn" style="background:transparent;border:1px solid var(--papel);color:var(--papel);padding:9px 12px;border-radius:6px;cursor:pointer;font-size:0.8rem;">Importar en lote</button>
+    <button id="bulkImportBtn" style="display:none;background:transparent;border:1px solid var(--papel);color:var(--papel);padding:9px 12px;border-radius:6px;cursor:pointer;font-size:0.8rem;">Importar en lote</button>
   </div>
 </header>
 
@@ -1035,10 +1035,20 @@ document.getElementById('saveBtn').addEventListener('click', async () => {
   await loadSites();
 });
 
+// =========================================================
+// Clave para ver el botón "Importar en lote". Cámbiala por la tuya.
+// Solo tú entras con: tu-link.vercel.app/?admin=ESTA_CLAVE
+// =========================================================
+const ADMIN_KEY = 'terremoto2026';
+
 populateCitySelects();
 initMap();
 loadSites();
 subscribeRealtime();
+
+if(new URLSearchParams(window.location.search).get('admin') === ADMIN_KEY){
+  document.getElementById('bulkImportBtn').style.display = 'inline-block';
+}
 
 function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
 
