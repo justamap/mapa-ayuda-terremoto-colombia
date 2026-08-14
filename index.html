@@ -147,6 +147,7 @@
   <div class="actions">
     <select id="citySelect"></select>
     <button id="addBtn">+ Agregar sitio</button>
+    <button id="bulkImportBtn" style="background:transparent;border:1px solid var(--papel);color:var(--papel);padding:9px 12px;border-radius:6px;cursor:pointer;font-size:0.8rem;">Importar en lote</button>
   </div>
 </header>
 
@@ -305,6 +306,37 @@
     <div class="modal-actions">
       <button id="nameCancelBtn">Cancelar</button>
       <button id="nameSaveBtn">Continuar</button>
+    </div>
+  </div>
+</div>
+
+<div id="bulkOverlay" style="display:none;position:fixed;inset:0;background:rgba(20,20,15,0.55);align-items:center;justify-content:center;z-index:1000;padding:14px;">
+  <div style="background:#fff;border-radius:8px;padding:20px;width:100%;max-width:640px;max-height:90vh;overflow-y:auto;">
+    <h2 style="margin-top:0;font-size:1.1rem;">Importar en lote</h2>
+    <p class="hint">Pega una lista, un sitio por línea, con los campos separados por <b>|</b> (barra vertical) en este orden:</p>
+    <p class="hint" style="background:var(--papel);padding:8px;border-radius:5px;">Nombre | Dirección | SI o NO (¿necesita voluntarios?) | Horario | Notas | Formulario | WhatsApp | Instagram | Teléfono</p>
+    <p class="hint">Deja un campo vacío si no aplica, pero conserva las barras. Ej: <code>Casa Azul | Carrera 20 #45A-33 | SI | 10am-7pm | Llevar donaciones médicas | | | https://instagram.com/casaazul | 3001234567</code></p>
+
+    <label>Ciudad *</label>
+    <select id="bulkCity"></select>
+
+    <label>Tipo de sitio para todos los de esta lista *</label>
+    <select id="bulkType">
+      <option value="acopio">📦 Centro de acopio</option>
+      <option value="distribucion">🚚 Centro de distribución</option>
+      <option value="evento">🎁 Eventos recaudación de fondos</option>
+      <option value="sangre">🩸 Donación de sangre</option>
+      <option value="organismo">🏥 Organismos institucionales</option>
+    </select>
+
+    <label>Datos a importar *</label>
+    <textarea id="bulkData" rows="10" style="width:100%;padding:8px;border:1px solid var(--linea);border-radius:5px;font-size:0.8rem;font-family:monospace;"></textarea>
+
+    <div id="bulkLog" style="margin-top:10px;font-size:0.78rem;max-height:200px;overflow-y:auto;background:var(--papel);border-radius:5px;padding:8px;display:none;"></div>
+
+    <div class="modal-actions">
+      <button id="bulkCancelBtn" style="background:#eee;padding:8px 14px;border-radius:5px;border:none;cursor:pointer;font-weight:600;">Cerrar</button>
+      <button id="bulkRunBtn" style="background:var(--verde);color:#fff;padding:8px 14px;border-radius:5px;border:none;cursor:pointer;font-weight:600;">Importar</button>
     </div>
   </div>
 </div>
@@ -1007,6 +1039,92 @@ populateCitySelects();
 initMap();
 loadSites();
 subscribeRealtime();
+
+function sleep(ms){ return new Promise(r => setTimeout(r, ms)); }
+
+document.getElementById('bulkImportBtn').addEventListener('click', () => {
+  document.getElementById('bulkCity').innerHTML = document.getElementById('citySelect').innerHTML;
+  document.getElementById('bulkCity').value = selectedCity;
+  document.getElementById('bulkLog').style.display = 'none';
+  document.getElementById('bulkLog').innerHTML = '';
+  document.getElementById('bulkOverlay').style.display = 'flex';
+});
+document.getElementById('bulkCancelBtn').addEventListener('click', () => {
+  document.getElementById('bulkOverlay').style.display = 'none';
+});
+
+document.getElementById('bulkRunBtn').addEventListener('click', () => {
+  requireName(runBulkImport);
+});
+
+async function runBulkImport(){
+  const city = document.getElementById('bulkCity').value;
+  const type = document.getElementById('bulkType').value;
+  const raw = document.getElementById('bulkData').value.trim();
+  if(!raw || !sb) return;
+  const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+  const log = document.getElementById('bulkLog');
+  log.style.display = 'block';
+  log.innerHTML = '';
+  document.getElementById('bulkRunBtn').disabled = true;
+  let ok = 0, fail = 0;
+
+  for(const line of lines){
+    const parts = line.split('|').map(p => p.trim());
+    const [name, addr, needsVol, horario, notas, formulario, whatsapp, instagram, telefono] = parts;
+    const row = document.createElement('div');
+    row.textContent = `Buscando ubicación: ${name || addr}...`;
+    log.appendChild(row);
+    log.scrollTop = log.scrollHeight;
+
+    if(!name || !addr){ row.textContent = `⚠️ Línea incompleta, omitida: "${line}"`; fail++; continue; }
+
+    try{
+      const q = encodeURIComponent(addr + ', ' + city + ', Colombia');
+      const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${q}&limit=1`);
+      const data = await res.json();
+      if(!data || !data.length){
+        row.textContent = `⚠️ No se encontró la dirección de "${name}" (${addr}) — omitido, agrégalo manualmente.`;
+        fail++;
+      } else {
+        const lat = parseFloat(data[0].lat), lng = parseFloat(data[0].lon);
+        const desc = [horario ? `Horario: ${horario}` : '', notas || ''].filter(Boolean).join(' — ');
+        const contactParts = [];
+        if(whatsapp) contactParts.push('WhatsApp: ' + whatsapp);
+        if(telefono) contactParts.push('Tel: ' + telefono);
+        const site = {
+          city, type, name, desc, addr, lat, lng,
+          needed: CAPACITY_TYPES.includes(type) ? 100 : 1,
+          have: 0,
+          needsVolunteers: CAPACITY_TYPES.includes(type) ? ((needsVol||'').toLowerCase().startsWith('s') ? 'si' : 'no') : null,
+          severity: null, supplies: [], departures: [], eventTime: null,
+          contact: contactParts.join(' · '),
+          instagram: instagram || '',
+          formulario: formulario || '',
+          fotoUrl: null,
+          estado: 'activo',
+          history: [{ts: new Date().toISOString(), by: currentUser, action: 'creó el sitio (importación en lote)'}]
+        };
+        const error = await insertSite(site);
+        if(error){ row.textContent = `❌ Error guardando "${name}": ${error.message}`; fail++; }
+        else { row.textContent = `✅ ${name}`; ok++; }
+      }
+    }catch(e){
+      row.textContent = `❌ Error con "${name}": ${e.message}`;
+      fail++;
+    }
+    await sleep(1100); // respeta el límite de 1 solicitud/segundo del buscador de direcciones
+  }
+
+  const summary = document.createElement('div');
+  summary.style.fontWeight = '700';
+  summary.style.marginTop = '6px';
+  summary.textContent = `Listo: ${ok} sitios importados, ${fail} con problema.`;
+  log.appendChild(summary);
+  log.scrollTop = log.scrollHeight;
+  document.getElementById('bulkRunBtn').disabled = false;
+  await loadSites();
+}
 
 async function searchOnMap(){
   const q = document.getElementById('mapSearchInput').value.trim();
