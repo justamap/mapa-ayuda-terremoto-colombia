@@ -18,6 +18,7 @@
     --papel:#F2EDE1; --tinta:#26261F; --rojo-urgente:#B23A2E; --azul-lleno:#2F6690; --linea:#D8CFB8;
   }
   *{box-sizing:border-box;}
+  html,body{height:100%;overflow-x:hidden;}
   body{margin:0;font-family:'Segoe UI',Roboto,Arial,sans-serif;background:var(--papel);color:var(--tinta);}
   header{
     background:var(--verde); color:var(--papel); padding:12px 20px;
@@ -43,9 +44,9 @@
   #mapSearchInput{flex:1;min-width:200px;padding:8px 10px;border:1px solid var(--linea);border-radius:6px;font-size:0.85rem;}
   #mapSearchBtn{background:var(--verde);color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:600;cursor:pointer;font-size:0.85rem;}
   .dot{width:10px;height:10px;border-radius:50%;display:inline-block;margin-right:3px;}
-  #layout{display:flex;height:calc(100vh - 156px);flex-wrap:wrap;min-height:0;}
-  #map{flex:1 1 55%;min-height:340px;}
-  #panel{flex:1 1 40%;min-width:300px;min-height:0;overflow-y:auto;padding:14px;border-left:1px solid var(--linea);background:#fff;}
+  #layout{display:flex;height:70vh;flex-wrap:wrap;min-height:0;}
+  #map{flex:1 1 55%;min-height:0;}
+  #panel{flex:1 1 40%;min-width:300px;height:100%;min-height:0;overflow-y:auto;padding:14px;border-left:1px solid var(--linea);background:#fff;}
   .card{border:1px solid var(--linea);border-left:5px solid var(--verde-claro);border-radius:6px;padding:12px;margin-bottom:12px;background:#fffdf8;}
   .card.urgente{border-left-color:var(--rojo-urgente);}
   .card.lleno{border-left-color:var(--azul-lleno);}
@@ -316,7 +317,6 @@
 const SUPABASE_URL = 'https://bwaugkjevaulpsayxxkw.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ3YXVna2pldmF1bHBzYXl4eGt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY2NTE5MzIsImV4cCI6MjEwMjIyNzkzMn0.ZCGGb57s1ziVBj196Y_X3Yzf1cDj2SAYbw_hdW_AtgM';
 // ==================================================
-// =========================================================
 
 const sb = (SUPABASE_URL.startsWith('http'))
   ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
